@@ -11,7 +11,7 @@ from collections import deque
 MIN_VAL = 0
 MAX_VAL = 100
 RECENT_MAX = 10
-SPAM_THRESHOLD = 3  # same/similar question repeated
+SPAM_THRESHOLD = 4  # same/similar question repeated this many times to count as spam
 LONG_QUESTION_CHARS = 200
 RAPID_WINDOW_SEC = 5
 RAPID_COUNT = 3
@@ -70,8 +70,14 @@ class BureaucraticState:
     def is_very_long(self, question: str) -> bool:
         return len(question.strip()) > LONG_QUESTION_CHARS
 
-    def should_consider_blacklist(self) -> bool:
-        return self.patience <= 20 and self.irritation >= 60
+    def should_consider_blacklist(self, question: str) -> bool:
+        """Strict: only consider blacklist when heavily provoked (high bar = requires struggle)."""
+        repetition = self._repetition_count(question) >= SPAM_THRESHOLD - 1  # at least 3 repeats
+        return (
+            self.patience <= 12
+            and self.irritation >= 72
+            and (repetition or self.inquiry_count >= 8)
+        )
 
     def get_classification_hints(self, question: str) -> dict:
         """Rule-based classification inputs for response mode selection."""

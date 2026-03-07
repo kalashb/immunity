@@ -7,6 +7,10 @@ from .adapters import (
     trigger_lights,
     trigger_sound,
     print_ticket,
+    log_inquiry,
+    log_blacklist_to_wall,
+    clear_logs,
+    clear_inquiry_log,
     read_physical_button,
 )
 
@@ -14,5 +18,9 @@ __all__ = [
     "trigger_lights",
     "trigger_sound",
     "print_ticket",
+    "log_inquiry",
+    "log_blacklist_to_wall",
+    "clear_logs",
+    "clear_inquiry_log",
     "read_physical_button",
 ]

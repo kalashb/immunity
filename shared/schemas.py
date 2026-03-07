@@ -61,3 +61,5 @@ class TicketPayload(BaseModel):
     curiosity: int
     administrative_load: int
     blacklisted: bool = False
+    question: str = ""
+    name: str = ""  # Optional person name for printer: "<question>" - <name>

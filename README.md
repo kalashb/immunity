@@ -7,10 +7,10 @@ Local-first interactive booth demo for Socratica Symposium. A bureaucratic entit
 ## Architecture
 
 - **Frontend**: Single-page HTML/CSS/JS. Status bar (4 counters), expressive eyes (state-driven animation), input + submit, event log, reaction + answer text. Dark, terminal-like.
-- **Backend**: FastAPI. Single in-memory session state (patience, irritation, curiosity, administrative_load, blacklist). Endpoints: `GET /api/state`, `POST /api/submit`, `POST /api/reset`.
+- **Backend**: FastAPI. Single in-memory session state (patience, irritation, curiosity, administrative_load, blacklist). Endpoints: `GET /api/state`, `POST /api/submit` (body: `question`, optional `name`), `POST /api/reset`, `POST /api/clear-logs` (optional `?clear_inquiries=true`).
 - **Classification**: Rule-based step before response generation. Evaluates repetition, length, rapid fire, and counters (patience, irritation, curiosity, load) to suggest **response mode**: DIRECT_ANSWER, PARTIAL_ANSWER, REFRAME, DENIAL, WARNING, BLACKLIST. Counters influence outcome (e.g. low patience → more denials; high curiosity → more answers).
 - **Ollama**: Local LLM via HTTP API. Receives suggested mode and state; returns JSON with `response_mode`, `reaction_text`, `answer_text` (when answering), ticket fields, deltas, hardware cues. Fallback to canned responses per mode on timeout/parse failure.
-- **Hardware abstraction**: Stubs in `hardware/adapters.py` (lights, sound, ticket print, physical button). Log to console and to `data/tickets.jsonl` and `data/blacklist_wall.jsonl`. Swap implementations later for Arduino/serial/USB.
+- **Hardware abstraction**: Stubs in `hardware/adapters.py` (lights, sound, ticket print, physical button). Log to console; tickets and blacklist wall to `data/tickets.jsonl` and `data/blacklist_wall.jsonl`; every inquiry to `data/inquiries.jsonl` for operator review. Use `format_ticket_for_printer(ticket_data)` for thermal body: `"<question>"`, `- <name>`, `<status/BLACKLIST>`. Swap implementations later for Arduino/serial/USB.
 
 The system is capable but selective: many clear questions get DIRECT_ANSWER or PARTIAL_ANSWER; unclear or abusive ones get REFRAME, DENIAL, or WARNING; blacklist remains rare. State and blacklist decisions stay rule-based; the model supplies answer content and phrasing.
 
@@ -37,8 +37,9 @@ immunity/
 │   ├── __init__.py
 │   └── schemas.py       # InquiryResponse, SessionState, TicketPayload
 ├── data/                # Created at runtime
-│   ├── tickets.jsonl
-│   └── blacklist_wall.jsonl
+│   ├── tickets.jsonl   # Ticket payloads (for thermal printer / replay)
+│   ├── blacklist_wall.jsonl
+│   └── inquiries.jsonl # One JSON object per inquiry (operator log)
 ├── requirements.txt
 └── README.md
 ```
@@ -109,10 +110,10 @@ immunity/
 
 ---
 
-## Reset state
+## Reset and logs
 
-```bash
-curl -X POST "http://localhost:8000/api/reset"
-```
+- **Reset state** (e.g. after blacklist so the next user can use the booth): from the UI click **Reset for next user** on the blacklist overlay, or `curl -X POST http://localhost:8000/api/reset`. Session state and case counter reset; blacklist cleared.
+- **Clear logs** (ticket + blacklist wall): click **Clear logs** on the blacklist overlay, or `curl -X POST "http://localhost:8000/api/clear-logs"`. Add `?clear_inquiries=true` to also wipe `data/inquiries.jsonl`.
+- **Operator log**: every submission is appended to `data/inquiries.jsonl` (timestamp, question, name, response_mode, reaction_text, answer_text, status, blacklisted, state_after). Open or `tail -f data/inquiries.jsonl` to see how people interact.
 
-Session state and case counter reset; blacklist cleared.
+**Optional name**: the top bar has "Your name (optional)". If provided, it is sent with each inquiry and included in the ticket payload for thermal print as `"<question>"` then `- <name>` then status/BLACKLIST.

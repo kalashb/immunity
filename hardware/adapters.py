@@ -8,10 +8,11 @@ import json
 from pathlib import Path
 from datetime import datetime
 
-# Directory for ticket logs (thermal payloads) and blacklist wall data
+# Directory for ticket logs (thermal payloads), blacklist wall, and inquiry log
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 WALL_LOG = DATA_DIR / "blacklist_wall.jsonl"
 TICKET_LOG = DATA_DIR / "tickets.jsonl"
+INQUIRIES_LOG = DATA_DIR / "inquiries.jsonl"
 
 
 def _ensure_data_dir() -> None:
@@ -28,12 +29,45 @@ def trigger_sound(mode: str) -> None:
     print(f"[HARDWARE] Sound -> {mode}")
 
 
+def format_ticket_for_printer(ticket_data: dict) -> str:
+    """Format ticket body for thermal printer: \"<question>\"\\n- <name>\\n<status>"""
+    q = (ticket_data.get("question") or "").strip() or "(no question)"
+    name = (ticket_data.get("name") or "").strip() or "Anonymous"
+    status = "BLACKLIST" if ticket_data.get("blacklisted") else (ticket_data.get("status") or "—")
+    return f'"{q}"\n- {name}\n{status}'
+
+
 def print_ticket(ticket_data: dict) -> None:
-    """Send ticket to thermal printer. For now: append to tickets log."""
+    """Send ticket to thermal printer. ticket_data includes question, name for format:
+    \"<question>\"\\n- <name>\\n<status/BLACKLIST>. Use format_ticket_for_printer() for body."""
     _ensure_data_dir()
     with open(TICKET_LOG, "a") as f:
         f.write(json.dumps(ticket_data) + "\n")
     print(f"[HARDWARE] Ticket printed (logged): {ticket_data.get('case_number', '?')}")
+
+
+def log_inquiry(record: dict) -> None:
+    """Append one inquiry to local log for operator review (all interactions)."""
+    _ensure_data_dir()
+    with open(INQUIRIES_LOG, "a") as f:
+        f.write(json.dumps(record) + "\n")
+
+
+def clear_logs() -> None:
+    """Truncate ticket and blacklist wall logs (e.g. after reset for next person)."""
+    _ensure_data_dir()
+    for path in (TICKET_LOG, WALL_LOG):
+        if path.exists():
+            path.write_text("")
+    print("[HARDWARE] Ticket and blacklist wall logs cleared.")
+
+
+def clear_inquiry_log() -> None:
+    """Truncate the inquiry log (optional, for full wipe)."""
+    _ensure_data_dir()
+    if INQUIRIES_LOG.exists():
+        INQUIRIES_LOG.write_text("")
+    print("[HARDWARE] Inquiry log cleared.")
 
 
 def log_blacklist_to_wall(ticket_data: dict) -> None:

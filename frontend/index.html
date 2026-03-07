@@ -8,6 +8,10 @@
 </head>
 <body>
   <div id="app">
+    <div class="name-bar">
+      <label for="name-input">Your name (optional)</label>
+      <input type="text" id="name-input" placeholder="Name" maxlength="80" autocomplete="name" />
+    </div>
     <header class="status-bar">
       <div class="counter" data-key="patience">
         <span class="label">Patience</span>
@@ -31,16 +35,28 @@
       <div id="eyes-container" class="eyes-container state-neutral">
         <div class="eyes">
           <div class="eye">
-            <div class="pupil"></div>
+            <div class="eye-ball">
+              <div class="eye-sclera"></div>
+              <div class="pupil"></div>
+            </div>
+            <div class="eye-lid eye-lid-top"></div>
           </div>
           <div class="eye">
-            <div class="pupil"></div>
+            <div class="eye-ball">
+              <div class="eye-sclera"></div>
+              <div class="pupil"></div>
+            </div>
+            <div class="eye-lid eye-lid-top"></div>
           </div>
         </div>
       </div>
       <div id="blacklist-overlay" class="blacklist-overlay hidden">
         <span>ACCESS DENIED</span>
         <span class="sub">CITIZEN FLAGGED</span>
+        <div class="blacklist-actions">
+          <button type="button" id="reset-btn">Reset for next user</button>
+          <button type="button" id="clear-logs-btn">Clear logs</button>
+        </div>
       </div>
     </main>
 

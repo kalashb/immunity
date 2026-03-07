@@ -5,4 +5,4 @@ cd "$(dirname "$0")"
 if [ -d venv ]; then
   source venv/bin/activate
 fi
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn backend.main:app --reload --reload-exclude venv --reload-exclude '*.pyc' --host 0.0.0.0 --port 8000

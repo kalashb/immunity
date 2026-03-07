@@ -25,7 +25,10 @@ from hardware.adapters import (
     trigger_lights,
     trigger_sound,
     print_ticket,
+    log_inquiry,
     log_blacklist_to_wall,
+    clear_logs,
+    clear_inquiry_log,
 )
 
 app = FastAPI(title="I Have Immunity")
@@ -50,6 +53,7 @@ def next_case_number() -> str:
 
 class SubmitInquiry(BaseModel):
     question: str
+    name: str = ""
 
 
 class ResetQuery(BaseModel):
@@ -64,6 +68,7 @@ def get_state() -> dict:
 @app.post("/api/submit")
 def submit_inquiry(body: SubmitInquiry) -> dict:
     question = (body.question or "").strip()
+    name = (body.name or "").strip()[:80]
     if not question:
         raise HTTPException(status_code=400, detail="Empty inquiry.")
     if state.is_blacklisted:
@@ -82,7 +87,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     is_repeated = state.is_repeated_question(question)
     is_rapid = state.is_rapid_fire()
     is_long = state.is_very_long(question)
-    consider_blacklist = state.should_consider_blacklist()
+    consider_blacklist = state.should_consider_blacklist(question)
 
     # Rule-based overrides: nudge deltas before calling model
     context_parts = []
@@ -93,12 +98,12 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     if is_rapid:
         context_parts.append("Rapid submissions.")
 
-    # Blacklist: rare. Only when state says so and either repeated/spam or random rare chance
+    # Blacklist: high bar — requires real struggle (repeated + rapid or very high irritation)
     force_blacklist = False
-    if consider_blacklist and (is_repeated or is_rapid):
-        force_blacklist = random.random() < 0.4
-    elif consider_blacklist and state.irritation >= 80:
-        force_blacklist = random.random() < 0.15
+    if consider_blacklist and is_repeated and is_rapid:
+        force_blacklist = random.random() < 0.18
+    elif consider_blacklist and state.irritation >= 88:
+        force_blacklist = random.random() < 0.06
 
     suggested_mode = state.suggest_response_mode(question, force_blacklist)
     response: InquiryResponse = process_inquiry(
@@ -107,6 +112,24 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         suggested_mode=suggested_mode,
         force_blacklist=force_blacklist,
     )
+
+    # When they're pushing the line but not blacklisted, taunt: "try harder"
+    near_blacklist = (
+        (consider_blacklist or (state.patience <= 28 and state.irritation >= 55))
+        and not response.blacklist
+        and (is_repeated or is_rapid or state.irritation >= 58)
+    )
+    if near_blacklist:
+        taunts = [
+            "You're going to have to try harder than that.",
+            "That won't be enough.",
+            "Insufficient. Try harder.",
+            "Patience declining. Do better.",
+            "Not impressed. Try again.",
+        ]
+        response = InquiryResponse(
+            **{**response.model_dump(), "reaction_text": random.choice(taunts)}
+        )
 
     state.apply_deltas(
         patience_delta=response.patience_delta,
@@ -131,6 +154,8 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         curiosity=state.curiosity,
         administrative_load=state.administrative_load,
         blacklisted=response.blacklist,
+        question=question,
+        name=name,
     )
     ticket_dict = ticket.model_dump()
 
@@ -139,6 +164,19 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     print_ticket(ticket_dict)
     if response.blacklist:
         log_blacklist_to_wall(ticket_dict)
+
+    log_inquiry({
+        "timestamp": datetime.utcnow().isoformat(),
+        "case_number": case_num,
+        "question": question,
+        "name": name,
+        "response_mode": response.response_mode,
+        "reaction_text": response.reaction_text,
+        "answer_text": response.answer_text or "",
+        "status": response.status,
+        "blacklisted": response.blacklist,
+        "state_after": state.to_dict(),
+    })
 
     return {
         "response_mode": response.response_mode,
@@ -156,11 +194,20 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
 
 @app.post("/api/reset")
 def reset_state(secret: str = "immunity-reset"):
-    """Admin/dev: reset session state. In production, protect this."""
+    """Reset session state (e.g. after blacklist so next user can use the booth)."""
     global state, _case_counter
     state = BureaucraticState()
     _case_counter = 0
     return {"ok": True, "message": "State reset."}
+
+
+@app.post("/api/clear-logs")
+def api_clear_logs(clear_inquiries: bool = False):
+    """Clear ticket and blacklist wall logs. Optionally clear inquiry log too."""
+    clear_logs()
+    if clear_inquiries:
+        clear_inquiry_log()
+    return {"ok": True, "message": "Logs cleared."}
 
 
 # Serve frontend from frontend/ at /

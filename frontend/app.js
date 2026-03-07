@@ -10,8 +10,31 @@
   const responseReaction = document.getElementById("response-reaction");
   const responseAnswer = document.getElementById("response-answer");
   const eventLog = document.getElementById("event-log");
+  const nameInput = document.getElementById("name-input");
+  const resetBtn = document.getElementById("reset-btn");
+  const clearLogsBtn = document.getElementById("clear-logs-btn");
 
   const PROCESSING_PHRASES = ["Reviewing...", "Escalating...", "Logging inquiry...", "Processing..."];
+  const SILENT_AFTER_MS = 12000;
+  let eyeState = null;
+  let silentTimer = null;
+  let isProcessing = false;
+
+  function doRandomBlink() {
+    var lids = eyesContainer.querySelectorAll(".eye-lid");
+    lids.forEach(function (lid) { lid.classList.add("blink"); });
+    setTimeout(function () {
+      lids.forEach(function (lid) { lid.classList.remove("blink"); });
+    }, 120);
+  }
+
+  function scheduleRandomBlink() {
+    var delay = 2000 + Math.random() * 3500;
+    setTimeout(function () {
+      if (!isProcessing) doRandomBlink();
+      scheduleRandomBlink();
+    }, delay);
+  }
 
   function getState() {
     return fetch(API + "/state").then((r) => r.json());
@@ -25,6 +48,7 @@
   }
 
   function stateToEyeClass(s) {
+    if (!s) return "state-neutral";
     if (s.is_blacklisted) return "state-blacklisting";
     if (s.administrative_load >= 75) return "state-overloaded";
     if (s.irritation >= 60) return "state-annoyed";
@@ -32,9 +56,38 @@
     return "state-neutral";
   }
 
-  function setEyes(state) {
-    const next = stateToEyeClass(state);
+  function setEyes(stateOrMode) {
+    if (stateOrMode && typeof stateOrMode === "object") eyeState = stateOrMode;
+    var next = typeof stateOrMode === "string"
+      ? stateOrMode
+      : (isProcessing ? "state-processing" : stateToEyeClass(stateOrMode));
     eyesContainer.className = "eyes-container " + next;
+  }
+
+  function setSilent(quiet) {
+    if (quiet) {
+      eyesContainer.className = "eyes-container state-silent";
+    } else if (eyeState && typeof eyeState === "object") {
+      setEyes(eyeState);
+    } else {
+      setEyes("state-neutral");
+    }
+  }
+
+  function scheduleSilent() {
+    if (silentTimer) clearTimeout(silentTimer);
+    silentTimer = setTimeout(function () {
+      if (!isProcessing) setSilent(true);
+      silentTimer = null;
+    }, SILENT_AFTER_MS);
+  }
+
+  function cancelSilent() {
+    if (silentTimer) {
+      clearTimeout(silentTimer);
+      silentTimer = null;
+    }
+    setSilent(false);
   }
 
   function triggerScreenEffect(effect) {
@@ -70,7 +123,10 @@
   }
 
   function setProcessing(visible, text) {
+    isProcessing = !!visible;
     if (visible) {
+      cancelSilent();
+      setEyes("state-processing");
       processingText.textContent = text || PROCESSING_PHRASES[0];
       processingEl.classList.remove("hidden");
       responseEl.classList.add("hidden");
@@ -98,10 +154,11 @@
     submitBtn.disabled = true;
     setProcessing(true, PROCESSING_PHRASES[Math.floor(Math.random() * PROCESSING_PHRASES.length)]);
 
+    var name = (nameInput && nameInput.value) ? nameInput.value.trim().slice(0, 80) : "";
     fetch(API + "/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: question }),
+      body: JSON.stringify({ question: question, name: name }),
     })
       .then(function (r) {
         if (!r.ok) return r.json().then(function (d) { throw new Error(d.detail || "Request failed"); });
@@ -112,6 +169,7 @@
         setResponse(data.reaction_text || "", data.answer_text || "");
         updateCounters(data.state);
         setEyes(data.state);
+        scheduleSilent();
         triggerScreenEffect(data.screen_effect || "none");
         if (data.blacklisted) {
           showBlacklist(true);
@@ -134,16 +192,45 @@
       });
   }
 
+  function doReset() {
+    fetch(API + "/reset", { method: "POST" })
+      .then(function () { return getState(); })
+      .then(function (s) {
+        updateCounters(s);
+        eyeState = s;
+        setEyes(s);
+        showBlacklist(false);
+        scheduleSilent();
+        setResponse("", "");
+        addLog("Session reset. Next user may proceed.");
+      })
+      .catch(function () { addLog("Reset failed."); });
+  }
+
+  function doClearLogs() {
+    fetch(API + "/clear-logs", { method: "POST" })
+      .then(function () { addLog("Ticket and blacklist logs cleared."); })
+      .catch(function () { addLog("Clear logs failed."); });
+  }
+
+  if (resetBtn) resetBtn.addEventListener("click", doReset);
+  if (clearLogsBtn) clearLogsBtn.addEventListener("click", doClearLogs);
+
   submitBtn.addEventListener("click", submit);
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") submit();
   });
+  input.addEventListener("focus", cancelSilent);
+
+  scheduleRandomBlink();
 
   getState()
     .then(function (s) {
       updateCounters(s);
+      eyeState = s;
       setEyes(s);
       showBlacklist(s.is_blacklisted);
+      scheduleSilent();
     })
     .catch(function () {
       updateCounters({
@@ -152,5 +239,7 @@
         curiosity: 20,
         administrative_load: 0,
       });
+      setEyes("state-neutral");
+      scheduleSilent();
     });
 })();
