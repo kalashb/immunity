@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>I Have Immunity</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="status-bar">
+      <div class="counter" data-key="patience">
+        <span class="label">Patience</span>
+        <span class="value" id="val-patience">—</span>
+      </div>
+      <div class="counter" data-key="irritation">
+        <span class="label">Irritation</span>
+        <span class="value" id="val-irritation">—</span>
+      </div>
+      <div class="counter" data-key="curiosity">
+        <span class="label">Curiosity</span>
+        <span class="value" id="val-curiosity">—</span>
+      </div>
+      <div class="counter" data-key="administrative_load">
+        <span class="label">Admin Load</span>
+        <span class="value" id="val-administrative_load">—</span>
+      </div>
+    </header>
+
+    <main class="eyes-section">
+      <div id="eyes-container" class="eyes-container state-neutral">
+        <div class="eyes">
+          <div class="eye">
+            <div class="pupil"></div>
+          </div>
+          <div class="eye">
+            <div class="pupil"></div>
+          </div>
+        </div>
+      </div>
+      <div id="blacklist-overlay" class="blacklist-overlay hidden">
+        <span>ACCESS DENIED</span>
+        <span class="sub">CITIZEN FLAGGED</span>
+      </div>
+    </main>
+
+    <section class="input-section">
+      <div id="processing" class="processing hidden">
+        <span id="processing-text">Reviewing...</span>
+      </div>
+      <div id="response" class="response hidden">
+        <div id="response-reaction" class="response-reaction"></div>
+        <div id="response-answer" class="response-answer hidden"></div>
+      </div>
+      <div class="input-row">
+        <input
+          type="text"
+          id="input"
+          placeholder="Enter inquiry..."
+          maxlength="500"
+          autocomplete="off"
+        />
+        <button type="button" id="submit">Submit</button>
+      </div>
+      <div id="event-log" class="event-log"></div>
+    </section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

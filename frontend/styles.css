@@ -1,0 +1,335 @@
+:root {
+  --bg: #0d0d0f;
+  --surface: #16161a;
+  --border: #2a2a30;
+  --text: #e4e4e7;
+  --muted: #71717a;
+  --accent: #a1a1aa;
+  --danger: #dc2626;
+  --warning: #ca8a04;
+  --ok: #16a34a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Mono", "SF Mono", "Consolas", monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ----- Status bar ----- */
+.status-bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 2px solid var(--border);
+}
+
+.counter {
+  flex: 1;
+  text-align: center;
+  padding: 0.25rem;
+}
+
+.counter .label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.counter .value {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* ----- Eyes ----- */
+.eyes-section {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+}
+
+.eyes-container {
+  position: relative;
+  transition: transform 0.15s ease, filter 0.2s ease;
+}
+
+.eyes {
+  display: flex;
+  gap: 3rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.eye {
+  width: 80px;
+  height: 80px;
+  background: #1c1c1e;
+  border: 3px solid var(--border);
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.pupil {
+  width: 28px;
+  height: 28px;
+  background: var(--text);
+  border-radius: 50%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: transform 0.2s ease, width 0.2s, height 0.2s;
+}
+
+/* States */
+.eyes-container.state-neutral .pupil {
+  transform: translate(-50%, -50%);
+}
+
+.eyes-container.state-curious .eye {
+  border-color: var(--accent);
+}
+
+.eyes-container.state-curious .pupil {
+  width: 22px;
+  height: 32px;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.eyes-container.state-annoyed .eye {
+  border-color: var(--warning);
+}
+
+.eyes-container.state-annoyed .pupil {
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%) translateY(-4px);
+}
+
+.eyes-container.state-overloaded .eye {
+  background: #2a1a1a;
+  border-color: var(--danger);
+}
+
+.eyes-container.state-overloaded .pupil {
+  width: 32px;
+  height: 20px;
+  transform: translate(-50%, -50%) rotate(-10deg);
+}
+
+.eyes-container.state-blacklisting .eye {
+  background: #2a0a0a;
+  border-color: var(--danger);
+  animation: eye-pulse 0.4s ease infinite;
+}
+
+.eyes-container.state-blacklisting .pupil {
+  width: 36px;
+  height: 36px;
+  background: var(--danger);
+  animation: pupil-shake 0.15s ease infinite;
+}
+
+@keyframes eye-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+@keyframes pupil-shake {
+  0%, 100% { transform: translate(-50%, -50%); }
+  25% { transform: translate(-52%, -50%); }
+  75% { transform: translate(-48%, -50%); }
+}
+
+.eyes-container.effect-shake {
+  animation: container-shake 0.4s ease;
+}
+
+.eyes-container.effect-flash {
+  animation: container-flash 0.6s ease;
+}
+
+@keyframes container-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes container-flash {
+  0% { filter: brightness(1); }
+  30% { filter: brightness(2.5); }
+  100% { filter: brightness(1); }
+}
+
+.eyes-container.effect-glow {
+  animation: container-glow 0.6s ease;
+}
+
+@keyframes container-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.3); }
+}
+
+.blacklist-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(220, 38, 38, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: overlay-flash 1s ease;
+}
+
+.blacklist-overlay span {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #fca5a5;
+}
+
+.blacklist-overlay .sub {
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+  letter-spacing: 0.15em;
+}
+
+@keyframes overlay-flash {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ----- Input section ----- */
+.input-section {
+  padding: 1rem;
+  background: var(--surface);
+  border-top: 2px solid var(--border);
+}
+
+.processing {
+  text-align: center;
+  padding: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.response {
+  text-align: center;
+  padding: 0.75rem;
+  color: var(--text);
+}
+
+.response-reaction {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.response-answer {
+  margin-top: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 400;
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+.response-answer:not(.hidden) {
+  display: block;
+}
+
+.input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+#input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+#input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+#submit {
+  padding: 0.75rem 1.5rem;
+  background: var(--border);
+  color: var(--text);
+  border: 2px solid var(--accent);
+  font-family: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#submit:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+#submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.event-log {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  max-height: 100px;
+  overflow-y: auto;
+  font-size: 0.75rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.event-log .entry {
+  padding: 0.15rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.event-log .entry:last-child {
+  border-bottom: none;
+}
+
+.event-log .entry.blacklist {
+  color: var(--danger);
+}
