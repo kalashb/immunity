@@ -5,6 +5,7 @@ Supports response_mode and answer_text for DIRECT_ANSWER / PARTIAL_ANSWER.
 from __future__ import annotations
 
 import json
+import random
 import httpx
 from shared.schemas import InquiryResponse
 
@@ -36,11 +37,38 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
+_CANNED_REACTIONS = {
+    "DIRECT_ANSWER": [
+        "Oh, okay. Approved.",
+        "Fuck yeah. Processed.",
+        "Aww, good one.",
+        "Inquiry approved.",
+        "Approved. I'll tell you for 400.",
+        "Processed. Was your childhood satisfactory? Proceeding anyway.",
+    ],
+    "DENIAL": [
+        "Uhm. Denied.",
+        "Oh. Inquiry denied.",
+        "Ah. Nope.",
+        "Inquiry denied.",
+        "Do you like your life? Denied.",
+        "400 and we can talk. Denied.",
+    ],
+    "WARNING": [
+        "Oh. Patience reduced.",
+        "Uhm. Warning issued.",
+        "Patience declining.",
+        "Do you value your continued operation? Warning issued.",
+    ],
+    "BLACKLIST": ["Oh heeeelllllll naaaaah. Citizen flagged.", "Citizen flagged."],
+}
+
 def _canned(question: str, response_mode: str = "DENIAL", blacklist: bool = False) -> InquiryResponse:
     if blacklist or response_mode == "BLACKLIST":
+        r = random.choice(_CANNED_REACTIONS["BLACKLIST"])
         return InquiryResponse(
             response_mode="BLACKLIST",
-            reaction_text="Citizen flagged.",
+            reaction_text=r,
             answer_text="",
             status="BLACKLISTED",
             ticket_type="NOTICE 17-B",
@@ -56,10 +84,15 @@ def _canned(question: str, response_mode: str = "DENIAL", blacklist: bool = Fals
             screen_effect="full_flash",
         )
     if response_mode == "DIRECT_ANSWER":
+        answers = [
+            "Answer not available. System fallback.",
+            "I will disclose upon receipt of 400. Administrative fee.",
+            "Processed. Was your childhood satisfactory? Proceeding.",
+        ]
         return InquiryResponse(
             response_mode="DIRECT_ANSWER",
-            reaction_text="Inquiry approved.",
-            answer_text="Answer not available. System fallback.",
+            reaction_text=random.choice(_CANNED_REACTIONS["DIRECT_ANSWER"]),
+            answer_text=random.choice(answers),
             status="APPROVED",
             ticket_type="FORM 201",
             ticket_title="Inquiry Processed",
@@ -112,7 +145,7 @@ def _canned(question: str, response_mode: str = "DENIAL", blacklist: bool = Fals
     if response_mode == "WARNING":
         return InquiryResponse(
             response_mode="WARNING",
-            reaction_text="Patience reduced.",
+            reaction_text=random.choice(_CANNED_REACTIONS["WARNING"]),
             answer_text="",
             status="WARNING",
             ticket_type="NOTICE 3",
@@ -129,7 +162,7 @@ def _canned(question: str, response_mode: str = "DENIAL", blacklist: bool = Fals
         )
     return InquiryResponse(
         response_mode="DENIAL",
-        reaction_text="Inquiry denied.",
+        reaction_text=random.choice(_CANNED_REACTIONS["DENIAL"]),
         answer_text="",
         status="DENIED",
         ticket_type="FORM 404",

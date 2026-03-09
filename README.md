@@ -4,6 +4,17 @@ Local-first interactive booth demo for Socratica Symposium. A bureaucratic entit
 
 ---
 
+## Tech stack
+
+- **Backend:** Python 3.10+, FastAPI, Uvicorn.
+- **LLM:** Ollama (local), HTTP API; structured JSON output with fallback to canned responses.
+- **Frontend:** Vanilla HTML, CSS, JavaScript; no framework; static files served by FastAPI.
+- **Data / schemas:** Pydantic models; session state in memory; logs in `data/*.jsonl`.
+- **Hardware:** Abstraction layer (stubs) for lights, sound, thermal printer, physical button; ready for Arduino/serial later.
+- **Run:** Single process (`uvicorn backend.main:app`); macOS-friendly; works offline after model pull.
+
+---
+
 ## Architecture
 
 - **Frontend**: Single-page HTML/CSS/JS. Status bar (4 counters), expressive eyes (state-driven animation), input + submit, event log, reaction + answer text. Dark, terminal-like.

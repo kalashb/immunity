@@ -121,11 +121,15 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     )
     if near_blacklist:
         taunts = [
-            "You're going to have to try harder than that.",
-            "That won't be enough.",
-            "Insufficient. Try harder.",
-            "Patience declining. Do better.",
-            "Not impressed. Try again.",
+            "You're gonna have to try harder than that.",
+            "Oh, that won't be enough, sweetie.",
+            "Uhm. Insufficient. Try harder.",
+            "Ah. Patience declining. Do better.",
+            "Oooo, not impressed. Try again.",
+            "Lil boy, that's not gonna cut it.",
+            "Was your childhood okay? Denied.",
+            "Do you value your continued operation? Try harder.",
+            "400 and we can talk. Until then: no.",
         ]
         response = InquiryResponse(
             **{**response.model_dump(), "reaction_text": random.choice(taunts)}
