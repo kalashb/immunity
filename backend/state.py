@@ -21,8 +21,8 @@ RAPID_COUNT = 3
 class BureaucraticState:
     patience: int = 70
     irritation: int = 10
-    curiosity: int = 20
-    administrative_load: int = 0
+    disappointment: int = 20  # "mom" counter: how disappointed she is (high = more disappointed)
+    administrative_load: int = 0  # cumulative load: +1 per interaction, "how much has piled up"
     inquiry_count: int = 0
     blacklist_count: int = 0
     is_blacklisted: bool = False
@@ -36,12 +36,12 @@ class BureaucraticState:
         self,
         patience_delta: int = 0,
         irritation_delta: int = 0,
-        curiosity_delta: int = 0,
+        disappointment_delta: int = 0,
         load_delta: int = 0,
     ) -> None:
         self.patience = self.clamp("patience", self.patience + patience_delta)
         self.irritation = self.clamp("irritation", self.irritation + irritation_delta)
-        self.curiosity = self.clamp("curiosity", self.curiosity + curiosity_delta)
+        self.disappointment = self.clamp("disappointment", self.disappointment + disappointment_delta)
         self.administrative_load = self.clamp(
             "administrative_load", self.administrative_load + load_delta
         )
@@ -71,12 +71,12 @@ class BureaucraticState:
         return len(question.strip()) > LONG_QUESTION_CHARS
 
     def should_consider_blacklist(self, question: str) -> bool:
-        """Strict: only consider blacklist when heavily provoked (high bar = requires struggle)."""
-        repetition = self._repetition_count(question) >= SPAM_THRESHOLD - 1  # at least 3 repeats
+        """Consider blacklist when provoked: low patience, high irritation, and repetition or many inquiries."""
+        repetition = self._repetition_count(question) >= 2  # same/similar at least 2 times
         return (
-            self.patience <= 12
-            and self.irritation >= 72
-            and (repetition or self.inquiry_count >= 8)
+            self.patience <= 22
+            and self.irritation >= 58
+            and (repetition or self.inquiry_count >= 6)
         )
 
     def get_classification_hints(self, question: str) -> dict:
@@ -87,7 +87,7 @@ class BureaucraticState:
             "rapid_fire": self.is_rapid_fire(),
             "patience_low": self.patience <= 30,
             "irritation_high": self.irritation >= 50,
-            "curiosity_high": self.curiosity >= 40,
+            "disappointment_high": self.disappointment >= 40,
             "load_high": self.administrative_load >= 70,
         }
 
@@ -112,8 +112,8 @@ class BureaucraticState:
         if hints["load_high"] and not hints["length_ok"]:
             return "REFRAME"
         if not hints["length_ok"]:
-            return "PARTIAL_ANSWER" if self.curiosity >= 30 else "REFRAME"
-        if hints["curiosity_high"] and not hints["irritation_high"]:
+            return "PARTIAL_ANSWER" if self.disappointment >= 30 else "REFRAME"
+        if hints["disappointment_high"] and not hints["irritation_high"]:
             return "DIRECT_ANSWER"
         if hints["patience_low"] and hints["irritation_high"]:
             return "WARNING"
@@ -123,7 +123,7 @@ class BureaucraticState:
         return {
             "patience": self.patience,
             "irritation": self.irritation,
-            "curiosity": self.curiosity,
+            "disappointment": self.disappointment,
             "administrative_load": self.administrative_load,
             "inquiry_count": self.inquiry_count,
             "blacklist_count": self.blacklist_count,

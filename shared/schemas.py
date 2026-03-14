@@ -29,7 +29,7 @@ class InquiryResponse(BaseModel):
     ticket_reason: str = ""
     patience_delta: int = 0
     irritation_delta: int = 0
-    curiosity_delta: int = 0
+    disappointment_delta: int = 0
     load_delta: int = 1
     blacklist: bool = False
     lights_mode: str = "neutral"
@@ -41,7 +41,7 @@ class SessionState(BaseModel):
     """Current bureaucratic state exposed to frontend."""
     patience: int = Field(ge=0, le=100)
     irritation: int = Field(ge=0, le=100)
-    curiosity: int = Field(ge=0, le=100)
+    disappointment: int = Field(ge=0, le=100)
     administrative_load: int = Field(ge=0, le=100)
     inquiry_count: int = 0
     blacklist_count: int = 0
@@ -58,7 +58,7 @@ class TicketPayload(BaseModel):
     timestamp: str
     patience: int
     irritation: int
-    curiosity: int
+    disappointment: int
     administrative_load: int
     blacklisted: bool = False
     question: str = ""

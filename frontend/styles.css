@@ -255,6 +255,17 @@ body {
   animation: pupil-curious 5s ease-in-out infinite;
 }
 
+/* Disappointed: unamused, slight droop */
+.eyes-container.state-disappointed .eye {
+  border-color: #8b7355;
+  animation: eye-curious 4s ease-in-out infinite;
+}
+.eyes-container.state-disappointed .pupil {
+  width: 38px;
+  height: 42px;
+  animation: pupil-silent 5s ease-in-out infinite;
+}
+
 /* Annoyed: eye roll (pupils roll up) + twitch */
 .eyes-container.state-annoyed .eye {
   border-color: var(--warning);

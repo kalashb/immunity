@@ -98,12 +98,19 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     if is_rapid:
         context_parts.append("Rapid submissions.")
 
-    # Blacklist: high bar — requires real struggle (repeated + rapid or very high irritation)
-    force_blacklist = False
-    if consider_blacklist and is_repeated and is_rapid:
-        force_blacklist = random.random() < 0.18
-    elif consider_blacklist and state.irritation >= 88:
-        force_blacklist = random.random() < 0.06
+    # Cheat code: 0blacklist = instant blacklist
+    force_blacklist = question.strip().lower() == "0blacklist"
+    if not force_blacklist:
+        # Blacklist: trigger when provoked; deterministic once it's really done with you
+        if consider_blacklist and state.patience <= 10 and state.irritation >= 70:
+            # Hard cutoff: at this point, the next bad interaction blacklists.
+            force_blacklist = True
+        elif consider_blacklist and is_repeated and is_rapid:
+            force_blacklist = random.random() < 0.45
+        elif consider_blacklist and state.irritation >= 70:
+            force_blacklist = random.random() < 0.20
+        elif consider_blacklist:
+            force_blacklist = random.random() < 0.12
 
     suggested_mode = state.suggest_response_mode(question, force_blacklist)
     response: InquiryResponse = process_inquiry(
@@ -113,6 +120,23 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         force_blacklist=force_blacklist,
     )
 
+    # Hard gate: blacklist is only allowed when rules say so explicitly.
+    # The model is NOT allowed to unilaterally blacklist; it can only flavor.
+    if not force_blacklist:
+        if response.blacklist or response.response_mode == "BLACKLIST":
+            # Downgrade to a warning with no blacklist flag.
+            response = InquiryResponse(
+                **{
+                    **response.model_dump(),
+                    "response_mode": "WARNING",
+                    "status": "WARNING",
+                    "blacklist": False,
+                    "lights_mode": "yellow",
+                    "sound_mode": "beep",
+                    "screen_effect": "minor_shake",
+                }
+            )
+
     # When they're pushing the line but not blacklisted, taunt: "try harder"
     near_blacklist = (
         (consider_blacklist or (state.patience <= 28 and state.irritation >= 55))
@@ -121,15 +145,18 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     )
     if near_blacklist:
         taunts = [
-            "You're gonna have to try harder than that.",
-            "Oh, that won't be enough, sweetie.",
-            "Uhm. Insufficient. Try harder.",
-            "Ah. Patience declining. Do better.",
-            "Oooo, not impressed. Try again.",
-            "Lil boy, that's not gonna cut it.",
-            "Was your childhood okay? Denied.",
-            "Do you value your continued operation? Try harder.",
-            "400 and we can talk. Until then: no.",
+            "I'm extremely disappointed.",
+            "Is this the respect you give?",
+            "You'll understand when I die.",
+            "Why can't you be like your cousin?",
+            "Why do you want to know? Try harder.",
+            "Shame on you.",
+            "So you don't value your parents anymore?",
+            "Nobody helps me in this house.",
+            "You're bringing shame to your family.",
+            "Is that your attitude towards life?",
+            "Cmon. Know better.",
+            "Nice try. Not enough.",
         ]
         response = InquiryResponse(
             **{**response.model_dump(), "reaction_text": random.choice(taunts)}
@@ -138,7 +165,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     state.apply_deltas(
         patience_delta=response.patience_delta,
         irritation_delta=response.irritation_delta,
-        curiosity_delta=response.curiosity_delta,
+        disappointment_delta=response.disappointment_delta,
         load_delta=response.load_delta,
     )
     if response.blacklist:
@@ -155,7 +182,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         timestamp=datetime.utcnow().isoformat(),
         patience=state.patience,
         irritation=state.irritation,
-        curiosity=state.curiosity,
+        disappointment=state.disappointment,
         administrative_load=state.administrative_load,
         blacklisted=response.blacklist,
         question=question,

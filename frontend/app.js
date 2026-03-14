@@ -16,6 +16,13 @@
 
   const PROCESSING_PHRASES = ["Reviewing...", "Escalating...", "Logging inquiry...", "Processing..."];
   const SILENT_AFTER_MS = 12000;
+  const COUNTER_LABELS = { patience: "Patience", irritation: "Irritation", disappointment: "Disappointment", administrative_load: "Mental load" };
+  // Set labels from JS so they stay correct even if HTML was cached
+  Object.keys(COUNTER_LABELS).forEach(function (key) {
+    const counter = document.querySelector(".counter[data-key=\"" + key + "\"]");
+    const labelEl = counter && counter.querySelector(".label");
+    if (labelEl) labelEl.textContent = COUNTER_LABELS[key];
+  });
   let eyeState = null;
   let silentTimer = null;
   let isProcessing = false;
@@ -41,9 +48,12 @@
   }
 
   function updateCounters(s) {
-    ["patience", "irritation", "curiosity", "administrative_load"].forEach(function (key) {
-      const el = document.getElementById("val-" + key);
-      if (el && s[key] !== undefined) el.textContent = s[key];
+    ["patience", "irritation", "disappointment", "administrative_load"].forEach(function (key) {
+      const valEl = document.getElementById("val-" + key);
+      if (valEl && s[key] !== undefined) valEl.textContent = s[key];
+      const counter = document.querySelector(".counter[data-key=\"" + key + "\"]");
+      const labelEl = counter && counter.querySelector(".label");
+      if (labelEl && COUNTER_LABELS[key]) labelEl.textContent = COUNTER_LABELS[key];
     });
   }
 
@@ -52,7 +62,7 @@
     if (s.is_blacklisted) return "state-blacklisting";
     if (s.administrative_load >= 75) return "state-overloaded";
     if (s.irritation >= 60) return "state-annoyed";
-    if (s.curiosity >= 50 && s.irritation < 40) return "state-curious";
+    if (s.disappointment >= 50 && s.irritation < 40) return "state-disappointed";
     return "state-neutral";
   }
 
@@ -236,7 +246,7 @@
       updateCounters({
         patience: 70,
         irritation: 10,
-        curiosity: 20,
+        disappointment: 20,
         administrative_load: 0,
       });
       setEyes("state-neutral");
