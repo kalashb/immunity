@@ -88,6 +88,40 @@ immunity/
 
    - Open `http://localhost:8000`. Type an inquiry, click Submit. Counters and eyes update; response and ticket are shown/logged.
 
+## Optional Local TTS (Supertonic)
+
+The booth can speak each response locally using [Supertonic](https://github.com/supertone-inc/supertonic). The app keeps this in a separate helper virtualenv so the main FastAPI app can stay on its current Python environment.
+
+1. **Bootstrap the TTS helper env**
+
+   ```bash
+   ./scripts/setup_supertonic_tts.sh
+   ```
+
+   This creates `.venv-supertonic/`, installs `supertonic==1.1.2` with Python 3.12, downloads the model into `data/tts/models/supertonic-2`, and writes a smoke-test WAV to `data/tts/audio/bootstrap.wav`.
+
+2. **Run the app normally**
+
+   ```bash
+   ./run.sh
+   ```
+
+3. **Submit an inquiry**
+
+   - Successful responses now return a generated WAV from `GET /api/tts/{audio_id}` and the frontend autoplays it.
+   - The UI includes a voice dropdown populated from the installed Supertonic voice styles, and each inquiry uses the selected voice.
+   - If the helper env is missing or synthesis fails, the booth still works; it simply falls back to text-only responses.
+
+### TTS configuration
+
+- `IMMUNITY_TTS_ENABLED=0` disables speech without removing the helper env.
+- `IMMUNITY_TTS_HELPER_PYTHON=/abs/path/to/python` points the backend at a different helper interpreter.
+- `IMMUNITY_TTS_VOICE=M1` sets the default Supertonic voice style used when the UI does not provide one.
+- `IMMUNITY_TTS_LANG=en` selects synthesis language.
+- `IMMUNITY_TTS_MODEL=supertonic-2` selects the Supertonic model.
+- `IMMUNITY_TTS_SPEED=1.0` and `IMMUNITY_TTS_TOTAL_STEPS=5` tune playback speed and quality.
+- `IMMUNITY_TTS_MODEL_DIR` and `IMMUNITY_TTS_AUDIO_DIR` override the default cache/output paths under `data/tts/`.
+
 ---
 
 ## Hardware plug-in points

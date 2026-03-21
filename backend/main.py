@@ -14,12 +14,19 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.state import BureaucraticState
 from backend.ollama_client import process_inquiry
+from backend.tts_service import (
+    get_audio_file,
+    list_available_voice_names,
+    normalize_voice_name,
+    synthesize_response_audio,
+)
 from shared.schemas import InquiryResponse, SessionState, TicketPayload
 from hardware.adapters import (
     trigger_lights,
@@ -54,10 +61,29 @@ def next_case_number() -> str:
 class SubmitInquiry(BaseModel):
     question: str
     name: str = ""
+    voice_name: str = ""
 
 
 class ResetQuery(BaseModel):
     secret: str = ""
+
+
+def with_tts_audio(payload: dict, voice_name: str = "") -> dict:
+    selected_voice = normalize_voice_name(voice_name)
+    asset = synthesize_response_audio(
+        payload.get("reaction_text", ""),
+        payload.get("answer_text", ""),
+        voice_name=selected_voice,
+    )
+    payload["voice_name"] = selected_voice
+    if asset is None:
+        payload["audio_url"] = None
+        payload["audio_duration_seconds"] = None
+        return payload
+
+    payload["audio_url"] = asset.audio_url
+    payload["audio_duration_seconds"] = asset.duration_seconds
+    return payload
 
 
 @app.get("/api/state")
@@ -72,8 +98,9 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     if not question:
         raise HTTPException(status_code=400, detail="Empty inquiry.")
     if state.is_blacklisted:
-        return {
+        return with_tts_audio({
             "reaction_text": "Access denied. Citizen blacklisted.",
+            "answer_text": "",
             "status": "BLACKLISTED",
             "ticket": None,
             "state": state.to_dict(),
@@ -81,7 +108,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
             "lights_mode": "red_alert",
             "sound_mode": "alarm",
             "screen_effect": "full_flash",
-        }
+        }, voice_name=body.voice_name)
 
     state.record_inquiry(question)
     is_repeated = state.is_repeated_question(question)
@@ -209,7 +236,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         "state_after": state.to_dict(),
     })
 
-    return {
+    return with_tts_audio({
         "response_mode": response.response_mode,
         "reaction_text": response.reaction_text,
         "answer_text": response.answer_text or "",
@@ -220,7 +247,23 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         "lights_mode": response.lights_mode,
         "sound_mode": response.sound_mode,
         "screen_effect": response.screen_effect,
+    }, voice_name=body.voice_name)
+
+
+@app.get("/api/tts/voices")
+def get_tts_voices() -> dict:
+    return {
+        "voices": list_available_voice_names(),
+        "default_voice": normalize_voice_name(""),
     }
+
+
+@app.get("/api/tts/{audio_id}")
+def get_tts_audio(audio_id: str):
+    audio_path = get_audio_file(audio_id)
+    if audio_path is None:
+        raise HTTPException(status_code=404, detail="Audio not found.")
+    return FileResponse(audio_path, media_type="audio/wav")
 
 
 @app.post("/api/reset")
