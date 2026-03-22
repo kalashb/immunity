@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.state import BureaucraticState
-from backend.ollama_client import process_inquiry
+from backend.grok_client import process_inquiry
 from shared.schemas import InquiryResponse, SessionState, TicketPayload
 from hardware.adapters import (
     init_arduino,
