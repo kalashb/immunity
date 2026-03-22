@@ -1,14 +1,16 @@
 """
-FastAPI server for I Have Immunity. Session state, submit inquiry, state poll, reset.
+FastAPI server for I Have Immunity.
+Blacklist is subjective (LLM-driven). Arduino buzzer as input, LEDs as output.
 """
 from __future__ import annotations
 
+import os
 import random
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-# Ensure project root is on path when running uvicorn backend.main:app
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -22,6 +24,8 @@ from backend.state import BureaucraticState
 from backend.ollama_client import process_inquiry
 from shared.schemas import InquiryResponse, SessionState, TicketPayload
 from hardware.adapters import (
+    init_arduino,
+    init_printer,
     trigger_lights,
     trigger_sound,
     print_ticket,
@@ -29,9 +33,28 @@ from hardware.adapters import (
     log_blacklist_to_wall,
     clear_logs,
     clear_inquiry_log,
+    read_physical_button,
+    cleanup_hardware,
 )
 
-app = FastAPI(title="I Have Immunity")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    port = os.environ.get("ARDUINO_PORT")
+    if port:
+        init_arduino(port)
+    try:
+        init_printer()
+    except Exception as exc:
+        print(f"[PRINTER] Init failed (non-fatal): {exc}")
+    yield
+    try:
+        cleanup_hardware()
+    except Exception:
+        pass
+
+
+app = FastAPI(title="I Have Immunity", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,7 +63,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Single session state (in-memory; one booth)
 state = BureaucraticState()
 _case_counter = 0
 
@@ -65,6 +87,12 @@ def get_state() -> dict:
     return state.to_dict()
 
 
+@app.get("/api/buzzer")
+def buzzer_poll() -> dict:
+    """Frontend polls this to detect physical buzzer presses."""
+    return {"pressed": read_physical_button()}
+
+
 @app.post("/api/submit")
 def submit_inquiry(body: SubmitInquiry) -> dict:
     question = (body.question or "").strip()
@@ -87,9 +115,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     is_repeated = state.is_repeated_question(question)
     is_rapid = state.is_rapid_fire()
     is_long = state.is_very_long(question)
-    consider_blacklist = state.should_consider_blacklist(question)
 
-    # Rule-based overrides: nudge deltas before calling model
     context_parts = []
     if is_long:
         context_parts.append("Very long inquiry.")
@@ -98,33 +124,33 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     if is_rapid:
         context_parts.append("Rapid submissions.")
 
-    # Cheat code: 0blacklist = instant blacklist
+    # Cheat code preserved
     force_blacklist = question.strip().lower() == "0blacklist"
-    if not force_blacklist:
-        # Blacklist: trigger when provoked; deterministic once it's really done with you
-        if consider_blacklist and state.patience <= 10 and state.irritation >= 70:
-            # Hard cutoff: at this point, the next bad interaction blacklists.
-            force_blacklist = True
-        elif consider_blacklist and is_repeated and is_rapid:
-            force_blacklist = random.random() < 0.45
-        elif consider_blacklist and state.irritation >= 70:
-            force_blacklist = random.random() < 0.20
-        elif consider_blacklist:
-            force_blacklist = random.random() < 0.12
+
+    # Blacklist decision is now subjective — let the LLM decide.
+    # We only hint via suggested_mode; the model reads conversation history and vibes it out.
+    # The one hard rule: can't blacklist before MIN_INTERACTIONS_FOR_BLACKLIST exchanges.
+    allow_blacklist = state.blacklist_eligible()
 
     suggested_mode = state.suggest_response_mode(question, force_blacklist)
+    history = state.get_history_summary()
+    context = " ".join(context_parts) if context_parts else "Normal processing."
+
+    if allow_blacklist and not force_blacklist:
+        context += " Blacklist is allowed if you feel they deserve it."
+
     response: InquiryResponse = process_inquiry(
         question,
         state.to_dict(),
         suggested_mode=suggested_mode,
         force_blacklist=force_blacklist,
+        history=history,
+        context=context,
     )
 
-    # Hard gate: blacklist is only allowed when rules say so explicitly.
-    # The model is NOT allowed to unilaterally blacklist; it can only flavor.
-    if not force_blacklist:
+    # Only hard gate: no blacklist before minimum interactions (unless cheat code)
+    if not force_blacklist and not allow_blacklist:
         if response.blacklist or response.response_mode == "BLACKLIST":
-            # Downgrade to a warning with no blacklist flag.
             response = InquiryResponse(
                 **{
                     **response.model_dump(),
@@ -136,31 +162,6 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
                     "screen_effect": "minor_shake",
                 }
             )
-
-    # When they're pushing the line but not blacklisted, taunt: "try harder"
-    near_blacklist = (
-        (consider_blacklist or (state.patience <= 28 and state.irritation >= 55))
-        and not response.blacklist
-        and (is_repeated or is_rapid or state.irritation >= 58)
-    )
-    if near_blacklist:
-        taunts = [
-            "I'm extremely disappointed.",
-            "Is this the respect you give?",
-            "You'll understand when I die.",
-            "Why can't you be like your cousin?",
-            "Why do you want to know? Try harder.",
-            "Shame on you.",
-            "So you don't value your parents anymore?",
-            "Nobody helps me in this house.",
-            "You're bringing shame to your family.",
-            "Is that your attitude towards life?",
-            "Cmon. Know better.",
-            "Nice try. Not enough.",
-        ]
-        response = InquiryResponse(
-            **{**response.model_dump(), "reaction_text": random.choice(taunts)}
-        )
 
     state.apply_deltas(
         patience_delta=response.patience_delta,
@@ -196,6 +197,8 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
     if response.blacklist:
         log_blacklist_to_wall(ticket_dict)
 
+    state.record_exchange(question, response.reaction_text, response.blacklist)
+
     log_inquiry({
         "timestamp": datetime.utcnow().isoformat(),
         "case_number": case_num,
@@ -229,6 +232,7 @@ def reset_state(secret: str = "immunity-reset"):
     global state, _case_counter
     state = BureaucraticState()
     _case_counter = 0
+    trigger_lights("green")
     return {"ok": True, "message": "State reset."}
 
 
@@ -241,7 +245,6 @@ def api_clear_logs(clear_inquiries: bool = False):
     return {"ok": True, "message": "Logs cleared."}
 
 
-# Serve frontend from frontend/ at /
 frontend_path = ROOT / "frontend"
 if frontend_path.exists():
     app.mount("/", StaticFiles(directory=str(frontend_path), html=True), name="static")

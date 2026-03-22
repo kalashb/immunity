@@ -1,6 +1,6 @@
 """
 Session state for the bureaucratic entity.
-Values persist across messages; used for counters and blacklist logic.
+Counters track mood. Blacklist decisions are subjective (LLM-driven), not threshold-based.
 """
 from __future__ import annotations
 
@@ -11,23 +11,27 @@ from collections import deque
 MIN_VAL = 0
 MAX_VAL = 100
 RECENT_MAX = 10
-SPAM_THRESHOLD = 4  # same/similar question repeated this many times to count as spam
 LONG_QUESTION_CHARS = 200
 RAPID_WINDOW_SEC = 5
 RAPID_COUNT = 3
+
+# Minimum interactions before the LLM is even allowed to consider blacklisting.
+# Prevents snap blacklists on the first message.
+MIN_INTERACTIONS_FOR_BLACKLIST = 3
 
 
 @dataclass
 class BureaucraticState:
     patience: int = 70
     irritation: int = 10
-    disappointment: int = 20  # "mom" counter: how disappointed she is (high = more disappointed)
-    administrative_load: int = 0  # cumulative load: +1 per interaction, "how much has piled up"
+    disappointment: int = 20
+    administrative_load: int = 0
     inquiry_count: int = 0
     blacklist_count: int = 0
     is_blacklisted: bool = False
     recent_questions: Deque[str] = field(default_factory=lambda: deque(maxlen=RECENT_MAX))
     recent_timestamps: Deque[float] = field(default_factory=lambda: deque(maxlen=RAPID_COUNT + 2))
+    conversation_history: list[dict] = field(default_factory=list)
 
     def clamp(self, key: str, value: int) -> int:
         return max(MIN_VAL, min(MAX_VAL, value))
@@ -52,6 +56,28 @@ class BureaucraticState:
         self.recent_questions.append(question.strip().lower()[:100])
         self.recent_timestamps.append(time.time())
 
+    def record_exchange(self, question: str, reaction: str, was_blacklisted: bool = False) -> None:
+        """Store a summary of each exchange so the LLM can read the conversation arc."""
+        self.conversation_history.append({
+            "q": question[:120],
+            "r": reaction[:120],
+            "bl": was_blacklisted,
+        })
+
+    def get_history_summary(self, max_entries: int = 8) -> str:
+        """Concise conversation history for the LLM to judge vibe."""
+        if not self.conversation_history:
+            return "No prior interactions."
+        entries = self.conversation_history[-max_entries:]
+        lines = []
+        for i, ex in enumerate(entries, 1):
+            lines.append(f'{i}. User: "{ex["q"]}" → You: "{ex["r"]}"')
+        return "\n".join(lines)
+
+    def blacklist_eligible(self) -> bool:
+        """Soft guard: at least N interactions before blacklist is on the table."""
+        return self.inquiry_count >= MIN_INTERACTIONS_FOR_BLACKLIST
+
     def _repetition_count(self, question: str) -> int:
         q = question.strip().lower()[:100]
         if not q:
@@ -59,7 +85,7 @@ class BureaucraticState:
         return sum(1 for r in self.recent_questions if r == q or (r in q or q in r))
 
     def is_repeated_question(self, question: str) -> bool:
-        return self._repetition_count(question) >= SPAM_THRESHOLD
+        return self._repetition_count(question) >= 3
 
     def is_rapid_fire(self) -> bool:
         import time
@@ -70,17 +96,7 @@ class BureaucraticState:
     def is_very_long(self, question: str) -> bool:
         return len(question.strip()) > LONG_QUESTION_CHARS
 
-    def should_consider_blacklist(self, question: str) -> bool:
-        """Consider blacklist when provoked: low patience, high irritation, and repetition or many inquiries."""
-        repetition = self._repetition_count(question) >= 2  # same/similar at least 2 times
-        return (
-            self.patience <= 22
-            and self.irritation >= 58
-            and (repetition or self.inquiry_count >= 6)
-        )
-
     def get_classification_hints(self, question: str) -> dict:
-        """Rule-based classification inputs for response mode selection."""
         return {
             "repetition": self._repetition_count(question) >= 2,
             "length_ok": not self.is_very_long(question),
@@ -96,10 +112,6 @@ class BureaucraticState:
         question: str,
         force_blacklist: bool,
     ) -> str:
-        """
-        Rule-based suggestion for response mode. Counters influence outcome.
-        Returns one of: DIRECT_ANSWER, PARTIAL_ANSWER, REFRAME, DENIAL, WARNING, BLACKLIST.
-        """
         if force_blacklist:
             return "BLACKLIST"
         hints = self.get_classification_hints(question)

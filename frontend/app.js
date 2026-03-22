@@ -232,6 +232,26 @@
   });
   input.addEventListener("focus", cancelSilent);
 
+  // -- Physical buzzer polling ------------------------------------------------
+  var BUZZER_POLL_MS = 150;
+  var buzzerActive = true;
+
+  function pollBuzzer() {
+    if (!buzzerActive) return;
+    fetch(API + "/buzzer")
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.pressed && !isProcessing) {
+          submit();
+        }
+      })
+      .catch(function () { /* Arduino not connected — silent */ })
+      .finally(function () {
+        if (buzzerActive) setTimeout(pollBuzzer, BUZZER_POLL_MS);
+      });
+  }
+
+  pollBuzzer();
   scheduleRandomBlink();
 
   getState()

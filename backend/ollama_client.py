@@ -188,6 +188,8 @@ def process_inquiry(
     state_dict: dict,
     suggested_mode: str = "DIRECT_ANSWER",
     force_blacklist: bool = False,
+    history: str = "No prior interactions.",
+    context: str = "Normal processing.",
 ) -> InquiryResponse:
     """Get structured response from Ollama; on failure try relevance retry, then generic canned."""
     from .prompts import (
@@ -202,7 +204,8 @@ def process_inquiry(
         disappointment=state_dict["disappointment"],
         administrative_load=state_dict["administrative_load"],
         suggested_mode=suggested_mode,
-        context="Normal processing.",
+        history=history,
+        context=context,
         force_blacklist=force_blacklist,
     )
     few_shot = []
