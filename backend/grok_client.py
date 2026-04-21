@@ -1,9 +1,11 @@
 """
 Grok API client (xAI). Primary model for the demo.
 Falls back to Ollama (ollama_client) if Grok fails, and prints a warning.
+ElevenLabs TTS for voice output.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import random
@@ -22,8 +24,13 @@ if _env_path.exists():
 
 GROK_API_KEY = os.environ.get("GROK_API")
 GROK_URL = "https://api.x.ai/v1/chat/completions"
-GROK_MODEL = "grok-4-1-fast-non-reasoning"
+GROK_MODEL = "grok-3-mini-fast"
 TIMEOUT = 30.0
+
+ELEVEN_API_KEY = os.environ.get("ELEVEN_API")
+ELEVEN_URL = "https://api.elevenlabs.io/v1/text-to-speech"
+ELEVEN_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
+ELEVEN_MODEL = "eleven_multilingual_v2"
 
 VALID_RESPONSE_MODES = frozenset({
     "DIRECT_ANSWER", "PARTIAL_ANSWER", "REFRAME", "DENIAL", "WARNING", "BLACKLIST",
@@ -175,3 +182,36 @@ def process_inquiry(
         history=history,
         context=context,
     )
+
+
+def synthesize_speech(text: str) -> str | None:
+    """Call ElevenLabs TTS, return base64-encoded mp3. Returns None on failure."""
+    if not ELEVEN_API_KEY:
+        print("[TTS] ELEVEN_API key not set — skipping")
+        return None
+    try:
+        headers = {
+            "xi-api-key": ELEVEN_API_KEY,
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "text": text,
+            "model_id": ELEVEN_MODEL,
+            "voice_settings": {
+                "stability": 0.5,
+                "similarity_boost": 0.75,
+            },
+        }
+        with httpx.Client(timeout=15.0) as client:
+            r = client.post(
+                f"{ELEVEN_URL}/{ELEVEN_VOICE_ID}",
+                json=payload,
+                headers=headers,
+            )
+            if r.status_code != 200:
+                print(f"[TTS] ElevenLabs error {r.status_code}: {r.text[:200]}")
+                return None
+            return base64.b64encode(r.content).decode()
+    except Exception as exc:
+        print(f"[TTS] Failed ({type(exc).__name__}: {exc})")
+        return None
