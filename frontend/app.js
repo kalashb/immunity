@@ -181,6 +181,10 @@
         setEyes(data.state);
         scheduleSilent();
         triggerScreenEffect(data.screen_effect || "none");
+        if (data.audio_b64) {
+          var audio = new Audio("data:audio/mpeg;base64," + data.audio_b64);
+          audio.play().catch(function () {});
+        }
         if (data.blacklisted) {
           showBlacklist(true);
           addLog("BLACKLISTED: " + (data.ticket && data.ticket.case_number ? data.ticket.case_number : "—"), true);
@@ -232,12 +236,58 @@
   });
   input.addEventListener("focus", cancelSilent);
 
-  // -- Physical buzzer polling ------------------------------------------------
+  // -- Web Serial: direct browser ↔ Arduino connection -----------------------
+  var connectBtn = document.getElementById("connect-arduino");
+  var serialConnected = false;
+
+  async function connectArduino() {
+    if (!("serial" in navigator)) {
+      addLog("Web Serial not supported in this browser.");
+      return;
+    }
+    try {
+      var port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      serialConnected = true;
+      connectBtn.textContent = "\u2705";
+      connectBtn.disabled = true;
+      addLog("Arduino connected via Web Serial.");
+
+      var decoder = new TextDecoderStream();
+      port.readable.pipeTo(decoder.writable);
+      var reader = decoder.readable.getReader();
+      var buf = "";
+
+      while (true) {
+        var result = await reader.read();
+        if (result.done) break;
+        buf += result.value;
+        var lines = buf.split("\n");
+        buf = lines.pop();
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i].trim();
+          if (line === "SUBMIT" && !isProcessing) {
+            submit();
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== "NotFoundError") {
+        addLog("Arduino: " + (err.message || "connection failed"));
+      }
+    }
+  }
+
+  if (connectBtn) {
+    connectBtn.addEventListener("click", connectArduino);
+  }
+
+  // -- Fallback: backend buzzer polling (when Web Serial isn't used) ----------
   var BUZZER_POLL_MS = 150;
   var buzzerActive = true;
 
   function pollBuzzer() {
-    if (!buzzerActive) return;
+    if (!buzzerActive || serialConnected) return;
     fetch(API + "/buzzer")
       .then(function (r) { return r.json(); })
       .then(function (data) {
@@ -245,9 +295,9 @@
           submit();
         }
       })
-      .catch(function () { /* Arduino not connected — silent */ })
+      .catch(function () {})
       .finally(function () {
-        if (buzzerActive) setTimeout(pollBuzzer, BUZZER_POLL_MS);
+        if (buzzerActive && !serialConnected) setTimeout(pollBuzzer, BUZZER_POLL_MS);
       });
   }
 

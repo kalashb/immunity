@@ -567,6 +567,28 @@ body {
   cursor: not-allowed;
 }
 
+#connect-arduino {
+  padding: 0.75rem;
+  background: var(--border);
+  color: var(--text);
+  border: 2px solid var(--accent);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+#connect-arduino:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+#connect-arduino:disabled {
+  opacity: 0.8;
+  cursor: default;
+  border-color: #4caf50;
+}
+
 .event-log {
   margin-top: 0.75rem;
   padding: 0.5rem;

@@ -35,12 +35,9 @@ def init_printer(port: str | None = None) -> bool:
 
 
 def trigger_lights(mode: str) -> None:
-    """Set LEDs via Arduino. Falls back to console log."""
+    """Control relay via Arduino. LED only turns on for blacklist/red_alert."""
     if arduino.connected:
-        if mode == "red_alert":
-            arduino.flash_red(times=3)
-        else:
-            arduino.set_lights(mode)
+        arduino.set_lights(mode)
     print(f"[HARDWARE] Lights -> {mode}")
 
 

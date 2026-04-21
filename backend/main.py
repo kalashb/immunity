@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from backend.state import BureaucraticState
-from backend.ollama_client import process_inquiry
+from backend.grok_client import process_inquiry, synthesize_speech
 from shared.schemas import InquiryResponse, SessionState, TicketPayload
 from hardware.adapters import (
     init_arduino,
@@ -212,6 +212,16 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         "state_after": state.to_dict(),
     })
 
+    # TTS: speak the reaction text
+    tts_text = response.reaction_text
+    if response.answer_text:
+        tts_text += " " + response.answer_text
+    audio_b64 = synthesize_speech(tts_text)
+    if audio_b64:
+        print(f"[TTS] Generated audio for: {tts_text[:50]}...")
+    else:
+        print(f"[TTS] No audio generated")
+
     return {
         "response_mode": response.response_mode,
         "reaction_text": response.reaction_text,
@@ -223,6 +233,7 @@ def submit_inquiry(body: SubmitInquiry) -> dict:
         "lights_mode": response.lights_mode,
         "sound_mode": response.sound_mode,
         "screen_effect": response.screen_effect,
+        "audio_b64": audio_b64,
     }
 
 
